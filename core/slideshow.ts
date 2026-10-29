@@ -4,7 +4,8 @@
 import { existsSync, mkdirSync, readdirSync, rmSync, statSync } from "node:fs";
 import { join } from "node:path";
 import sharp from "sharp";
-import { draftSlideTimeline, INTENSITIES, normalizeSlideshow, promptFor, SLIDE_CAMERAS, SLIDE_TRANSITIONS, type SlideshowT, type SlideTimeline } from "../src/slides";
+import { draftSlideTimeline, INTENSITIES, anchorNote, normalizeSlideshow, PRESETS, presetKeys, promptFor, SLIDE_CAMERAS, SLIDE_TRANSITIONS, type SlideshowT, type SlideTimeline } from "../src/slides";
+import { anchorReady } from "./presets";
 import { projectDir, ROOT, type Project, type Settings } from "./store";
 import { VOICES } from "./voice";
 
@@ -16,7 +17,10 @@ const EXAMPLE = `{
   "title": "What did people REALLY do all day in the Middle Ages?",
   "preset": "stickman",
   "style": "",
-  "subjects": [{ "name": "Cow", "look": "a stocky red-brown cow with a white muzzle, small horns and a patient face" }],
+  "subjects": [
+    { "name": "Stickman", "look": "wearing a worn olive tunic with a rope belt and a straw hat" },
+    { "name": "Cow", "look": "a stocky red-brown cow with a white muzzle, small horns and a patient face" }
+  ],
   "settings": { "format": "landscape", "language": "en-us", "voice": "bm_george", "speed": 1.0, "music": null, "captions": "bold" },
   "scenes": [
     { "narration": "Imagine waking up in 1300 inside a freezing barn, sharing the room with your cow. That was the luxury version.",
@@ -56,23 +60,33 @@ TRANSITIONS (how this scene ARRIVES; scene 1's is ignored)
 - crossfade: smooth default for continuous flow. cut: quick lists and fast beats. dip: dip to black for a time jump or chapter change. slideLeft / slideRight: next-vs-previous, comparisons. wipe: contrast. zoom: going deeper or inside. flash: a shock or punchline. blur: dreams, memories, flashbacks.
 - Mostly 2 types, with a different one as an occasional accent.
 
-PRESETS (top-level "preset")
-- "stickman": a white stickman comic. The app supplies the art direction (thick black ink outlines, dark painterly detail, moody lighting) and a fixed main character named "Stickman" (perfectly round white head, dot eyes, thin black stick body), so you do NOT write style or describe him. Leave "style" empty, or use it only for small topic tweaks (palette, era, location).
-- With this preset: list "Stickman" in subjects for every scene where he appears; skip it for pure establishing shots of places or objects. In prompt, say what he is doing and his expression ("shivering with a worried face", "grinning at a pile of gold"). He is the viewer's stand-in, so narrate in second person ("you"). Environments, animals and props are richly detailed and illustrated; other people are extra stickmen defined as named subjects that differ only by clothes, hats or props. The funnier or more tense the expression, the better.
-- Omit "preset" for a free style: then write your own style paragraph and subjects as described above.
+{{PRESETS}}
 
 OTHER FIELDS
 - label: short lower-third text for a place, date or name on key scenes (e.g. "London, 1348"), else "".
 - settings (optional, you choose what suits the topic): format landscape (16:9) or vertical (9:16 Shorts); language en-us, en-gb or es; voice (ids below); speed 0.9-1.15; music (a filename from the list below, or null); musicVolume 0.08-0.2; captions bold, subtle or none.
 - A scene may have its own "voice" id (rare: a quotation or a second speaker). Otherwise leave it out.
 
-JSON SHAPE (title, preset, style, subjects, settings, scenes; scene = narration, prompt, subjects, camera, intensity, focus, transition, label, voice)
+JSON SHAPE (title, preset, style, subjects [name, look, kind], settings, scenes; scene = narration, prompt, subjects, camera, intensity, focus, transition, label, voice)
 ${EXAMPLE}`;
+
+// The presets section of the guide is generated from the preset definitions, so new looks show up by themselves.
+function presetGuide() {
+  const list = presetKeys.map((k) => `- "${k}": ${PRESETS[k].label}. ${PRESETS[k].blurb} Hero: ${PRESETS[k].hero}.`).join("\n");
+  return `PRESETS (top-level "preset"; omit it for a free style)
+Choose the preset that fits the topic and tone. The app then supplies the art direction for the WHOLE picture (characters, scenery, light, palette) and a fixed hero, so you do NOT write a style (leave "style" empty, or use it only for small topic tweaks such as palette, era or location) and you do NOT describe the hero's body.
+${list}
+With a preset:
+- List the hero's name in a scene's subjects for every scene where he appears; skip it for pure scenery or object shots. In prompt say what he is doing and his expression ("shivering with a worried face", "grinning at a pile of gold"). He is the viewer's stand-in, so narrate in second person ("you").
+- Optionally give him a signature outfit for the whole video: add a subject with the hero's name whose look is only the clothes, e.g. { "name": "<hero>", "look": "wearing a worn olive tunic with a rope belt and a straw hat" } (the app adds it to his fixed look; without it he keeps his default body). Keep that outfit the same in every scene unless the story changes it.
+- Give every subject a "kind": "person", "creature" or "thing". Every person other than the hero (named side characters, crowds, extras) is automatically built on the hero's own figure, so define each recurring person by OUTFIT AND PROPS ONLY (e.g. "wearing crumpled silver foil armor and a helmet with a small plume"), never by face, skin, hair or anatomy (words like those are flagged as warnings). Creatures and things (kind "creature" / "thing", e.g. a dragon, a cow, a machine) are the exception: describe them fully, in the preset's materials and style. Environments and props follow the preset's art direction, so write them as plain objects and places.
+- Preset heroes are drawn from a reference image, so keep each scene to one clear pose and expression per hero.`;
+}
 
 export function slideshowGuide() {
   const voices = Object.entries(VOICES).map(([lang, list]) => `${lang}: ${list.map((v) => `${v.id} (${v.label.replace(/^[^(]*\(|\)$/g, "")})`).join(", ")}`);
   const music = musicFiles();
-  return `${GUIDE}
+  return `${GUIDE.replace("{{PRESETS}}", presetGuide())}
 
 VOICES
 ${voices.join("\n")}
@@ -103,12 +117,12 @@ export function promptList(p: Project): SlidePrompt[] {
   const show = p.slideshow;
   if (!show) return [];
   const images = slideImages(p.id, show.scenes.length);
-  return show.scenes.map((sc, i) => ({ n: i + 1, file: slug(i), narration: sc.narration, camera: sc.camera, prompt: promptFor(show, i, p.settings.format), image: images[i] }));
+  return show.scenes.map((sc, i) => ({ n: i + 1, file: slug(i), narration: sc.narration, camera: sc.camera, prompt: promptFor(show, i, p.settings.format, anchorReady(show.preset)), image: images[i] }));
 }
 
 // Every prompt in one copy-paste block, with the file name each image should have.
 export function promptsText(p: Project): string {
-  return promptList(p).map((x) => `SCENE ${x.n} (save as ${x.file}.png)\n${x.prompt}`).join("\n\n");
+  return anchorNote(p.slideshow, anchorReady(p.slideshow?.preset)) + promptList(p).map((x) => `SCENE ${x.n} (save as ${x.file}.png)\n${x.prompt}`).join("\n\n");
 }
 
 // ---- images (projects/<id>/images/slide-NN.jpg, converted on import)

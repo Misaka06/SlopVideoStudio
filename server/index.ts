@@ -13,6 +13,7 @@ import { VOICES } from "../core/voice";
 import * as S from "../src/schema";
 import * as SS from "../src/slides";
 import * as slides from "../core/slideshow";
+import * as presets from "../core/presets";
 
 const PORT = Number(process.env.PORT ?? 4000);
 const MUSIC_DIR = join(store.ROOT, "assets", "music");
@@ -221,13 +222,29 @@ app.post("/api/projects/:id/run", wrap((req) => {
 // ---- image slideshows: the LLM writes the script; the user generates the images from the
 // prompts and drops them in (here or through the MCP server); then voice + render.
 
+// Looks (presets) and their style-anchor images: the hero character sheet people generate once per look.
+app.get("/api/presets", wrap(() => presets.list()));
+
+app.put("/api/presets/:key/anchor", express.raw({ type: "image/*", limit: "40mb" }), wrap(async (req) => {
+  if (!Buffer.isBuffer(req.body)) throw new Error("Send a PNG, JPG or WEBP image");
+  return presets.saveAnchor(String(req.params.key), req.body);
+}));
+
+// Import an image already on this computer (used by the MCP server).
+app.post("/api/presets/:key/anchor/import", wrap(async (req) => {
+  const path = String(req.body?.path ?? "");
+  if (!existsSync(path)) throw new Error(`File not found: ${path}`);
+  return presets.saveAnchor(String(req.params.key), readFileSync(path));
+}));
+
 app.get("/api/slideshow-guide", wrap(() => ({ guide: slides.slideshowGuide() })));
 
 // Body: { slideshow, settings? }. Narration is recorded right away; rendering waits for the images.
 app.post("/api/slideshows", wrap((req) => {
   const { slideshow, settings } = req.body ?? {};
   if (!slideshow) throw new Error("Give a slideshow (the script JSON)");
-  return [summary(jobs.createSlideshow({ slideshow, settings }))];
+  const p = jobs.createSlideshow({ slideshow, settings });
+  return [{ ...summary(p), warnings: SS.lintSlideshow(p.slideshow!) }];
 }));
 
 app.put("/api/projects/:id/slideshow", wrap((req) => jobs.updateSlideshow(String(req.params.id), req.body.slideshow, req.body.settings)));

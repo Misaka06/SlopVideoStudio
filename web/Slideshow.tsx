@@ -2,9 +2,10 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Player, type PlayerRef } from "@remotion/player";
 import { Slideshow } from "../src/Slideshow";
 import { FPS } from "../src/schema";
-import { draftSlideTimeline, effectiveSubjects, PRESETS, promptFor, slideFrames, slideTotalFrames, type SlidePreset, type SlideSceneT } from "../src/slides";
+import { anchorNote, draftSlideTimeline, effectiveSubjects, kindOf, lintSlideshow, PRESETS, promptFor, SUBJECT_KINDS, slideFrames, slideTotalFrames, type SlidePreset, type SlideSceneT } from "../src/slides";
 import example from "../examples/medieval-day.json";
-import { api, type Config, type Settings, type SlideshowT, type SlideshowView as ViewData, type Summary } from "./api";
+import { AnchorCard, PresetPicker, usePresets } from "./Styles";
+import { api, type Config, type PresetEntry, type Settings, type SlideshowT, type SlideshowView as ViewData, type Summary } from "./api";
 import { Field, fmtTime, Progress, Sel, SettingsForm, StatusPill } from "./ui";
 
 // ---------------------------------------------------------------- New slideshow
@@ -20,6 +21,12 @@ const copy = async (text: string) => {
   await navigator.clipboard.writeText(text);
 };
 
+// The selected look's style anchor: copy it into the image generator, or add it first when missing.
+const AnchorPanel: React.FC<{ preset: SlidePreset; presets: PresetEntry[] | null; reload: () => void }> = ({ preset, presets, reload }) => {
+  const p = preset ? presets?.find((x) => x.key === preset) : null;
+  return p ? <AnchorCard p={p} onChanged={reload} compact /> : null;
+};
+
 const PresetSelect: React.FC<{ value: SlidePreset; onChange: (p: SlidePreset) => void }> = ({ value, onChange }) => (
   <select value={value} onChange={(e) => onChange(e.target.value as SlidePreset)}>
     {Object.entries(PRESETS).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
@@ -32,6 +39,7 @@ export const SlideshowNewPanel: React.FC<{ config: Config; onCreated: (s: Summar
   const [length, setLength] = useState(1);
   const [lang, setLang] = useState<Settings["lang"]>("en-us");
   const [preset, setPreset] = useState<SlidePreset>("stickman");
+  const { list: presets, reload: reloadPresets } = usePresets();
   const [scriptText, setScriptText] = useState("");
   const [override, setOverride] = useState(false);
   const [s, setS] = useState<Settings>(config.defaults);
@@ -51,7 +59,7 @@ export const SlideshowNewPanel: React.FC<{ config: Config; onCreated: (s: Summar
       const { guide } = await api.slideshowGuide();
       const L = LENGTHS[length];
       const language = { "en-us": "English (US)", "en-gb": "English (UK)", es: "Spanish" }[lang];
-      await copy(`${guide}\n\n---\nWrite the slideshow script now.\nTOPIC: ${topic.trim() || "(choose an interesting topic)"}\nNARRATION LANGUAGE: ${language} (settings.language "${lang}")\nFORMAT: ${L.format} | LENGTH: ${L.label}, about ${L.scenes} scenes\nLOOK: ${preset ? `preset "${preset}" (${PRESETS[preset].label}); set "preset": "${preset}" in the JSON` : "free style (no preset); write your own style and subjects"}\nReply with only the JSON object.`);
+      await copy(`${guide}\n\n---\nWrite the slideshow script now.\nTOPIC: ${topic.trim() || "(choose an interesting topic)"}\nNARRATION LANGUAGE: ${language} (settings.language "${lang}")\nFORMAT: ${L.format} | LENGTH: ${L.label}, about ${L.scenes} scenes\nLOOK: ${preset ? `preset "${preset}" (${PRESETS[preset].label}, hero ${PRESETS[preset].hero}); set "preset": "${preset}" in the JSON` : "free style (no preset); write your own style and subjects"}\nReply with only the JSON object.`);
       flash("Brief copied. Paste it into your AI chat, then paste its JSON reply below.");
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
@@ -98,10 +106,10 @@ export const SlideshowNewPanel: React.FC<{ config: Config; onCreated: (s: Summar
             <option value="es">Spanish</option>
           </select>
         </Field>
-        <Field label="Look">
-          <PresetSelect value={preset} onChange={setPreset} />
-        </Field>
       </div>
+      <label className="lbl">Look: pick the art style, hero and scenery</label>
+      <PresetPicker value={preset} presets={presets} onChange={setPreset} />
+      <AnchorPanel preset={preset} presets={presets} reload={reloadPresets} />
       <div className="actions">
         <button onClick={copyBrief}>Copy brief for my AI chat</button>
         {note && <span className="muted small">{note}</span>}
@@ -150,6 +158,7 @@ export const SlideshowView: React.FC<{ id: string; config: Config; summary?: Sum
   const [current, setCurrent] = useState(0);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [target, setTarget] = useState<number | null>(null); // scene whose image slot receives a pasted picture
+  const { list: presets, reload: reloadPresets } = usePresets();
   const player = useRef<PlayerRef>(null);
 
   const stamp = summary ? `${summary.status}|${summary.next}|${summary.video}|${summary.message}|${summary.imagesMissing}` : "";
@@ -255,7 +264,10 @@ export const SlideshowView: React.FC<{ id: string; config: Config; summary?: Sum
   const voiced = p.next === "render" || Boolean(p.video);
 
   // Prompts follow the draft, so edits to the style, subjects or a scene show up right away.
-  const livePrompts = draft.scenes.map((_, i) => promptFor(draft, i, p.settings.format));
+  // Without the look's anchor image the prompts do not ask for a reference image.
+  const anchorReady = !draft.preset || !presets || Boolean(presets.find((x) => x.key === draft.preset)?.anchorUrl);
+  const notes = lintSlideshow(draft);
+  const livePrompts = draft.scenes.map((_, i) => promptFor(draft, i, p.settings.format, anchorReady));
   const save = () => act(async () => {
     const saved = await api.saveSlideshow(id, draft);
     if (saved.slideshow) setDraft(saved.slideshow);
@@ -304,6 +316,12 @@ export const SlideshowView: React.FC<{ id: string; config: Config; summary?: Sum
 
       {err && <div className="banner error">{err}</div>}
       {p.error && <div className="banner error">{p.error}</div>}
+      {notes.length > 0 && (
+        <div className="banner warn">
+          <strong>Script notes</strong>
+          <ul className="notes">{notes.map((n, i) => <li key={i}>{n}</li>)}</ul>
+        </div>
+      )}
       {dirty && <div className="banner warn">Unsaved edits. The preview shows them with estimated timing and no audio. Save to update the image prompts, then render.</div>}
       {!dirty && missing > 0 && (
         <div className="banner warn">
@@ -340,17 +358,18 @@ export const SlideshowView: React.FC<{ id: string; config: Config; summary?: Sum
             <div className="padded">
               <label className="lbl">Look</label>
               <PresetSelect value={draft.preset} onChange={(preset) => setDraft({ ...draft, preset })} />
-              {draft.preset && <p className="muted small">{PRESETS[draft.preset].label} adds its own art direction and the fixed character {PRESETS[draft.preset].subjects.map((x) => x.name).join(", ")} to the prompts.</p>}
+              {draft.preset && <p className="muted small">{PRESETS[draft.preset].label} adds its own art direction (characters and scenery) and the fixed hero {PRESETS[draft.preset].hero} to the prompts.</p>}
               <label className="lbl">{draft.preset ? "Extra style notes added to every image prompt" : "Style added to every image prompt"}</label>
               <textarea rows={draft.preset ? 2 : 4} value={draft.style} onChange={(e) => setDraft({ ...draft, style: e.target.value })} />
               {draft.subjects.map((sub, i) => (
                 <div className="subject" key={i}>
                   <input value={sub.name} onChange={(e) => setDraft({ ...draft, subjects: draft.subjects.map((x, j) => (j === i ? { ...x, name: e.target.value } : x)) })} />
-                  <textarea rows={2} value={sub.look} onChange={(e) => setDraft({ ...draft, subjects: draft.subjects.map((x, j) => (j === i ? { ...x, look: e.target.value } : x)) })} />
+                  <textarea rows={2} value={sub.look} placeholder={kindOf(sub) === "person" && draft.preset ? "outfit and props only" : "full description"} onChange={(e) => setDraft({ ...draft, subjects: draft.subjects.map((x, j) => (j === i ? { ...x, look: e.target.value } : x)) })} />
+                  <Sel title="What it is: people are built on the look's hero figure, so only describe their outfit" value={kindOf(sub)} options={SUBJECT_KINDS} onChange={(v) => setDraft({ ...draft, subjects: draft.subjects.map((x, j) => (j === i ? { ...x, kind: v as typeof x.kind } : x)) })} />
                   <button className="ghost small" title="Remove" onClick={() => setDraft({ ...draft, subjects: draft.subjects.filter((_, j) => j !== i) })}>✕</button>
                 </div>
               ))}
-              <button className="ghost small" onClick={() => setDraft({ ...draft, subjects: [...draft.subjects, { name: "New subject", look: "describe their look: age, clothes, colors, hair" }] })}>+ Subject</button>
+              <button className="ghost small" onClick={() => setDraft({ ...draft, subjects: [...draft.subjects, { name: "New subject", look: "wearing a plain brown cloak and a hood", kind: "person" as const }] })}>+ Subject</button>
             </div>
           </details>
         </div>
@@ -376,13 +395,14 @@ export const SlideshowView: React.FC<{ id: string; config: Config; summary?: Sum
         </div>
       </div>
 
+      <AnchorPanel preset={draft.preset} presets={presets} reload={reloadPresets} />
       <ImagesPanel
         prompts={livePrompts}
         entries={p.prompts}
         stale={dirty}
         note={note}
         onCopyAll={async () => {
-          await copy(livePrompts.map((t, i) => `SCENE ${i + 1} (save as slide-${String(i + 1).padStart(2, "0")}.png)\n${t}`).join("\n\n"));
+          await copy(anchorNote(draft, anchorReady) + livePrompts.map((t, i) => `SCENE ${i + 1} (save as slide-${String(i + 1).padStart(2, "0")}.png)\n${t}`).join("\n\n"));
           flash("All prompts copied");
         }}
         target={target}

@@ -12,6 +12,15 @@ import * as SS from "../src/slides";
 
 const BASE = process.env.ANIMATOR_URL ?? "http://localhost:4000";
 const PROJECTS = join(import.meta.dirname, "..", "projects");
+const PRESET_DIR = join(import.meta.dirname, "..", "assets", "presets");
+// Prompts of a look with a style anchor start with a STYLE ANCHOR line (or a NOTE when the anchor image is missing);
+// point the model to the file to hand over, or to what to generate first.
+const anchorLine = (t: string) => {
+  const file = /^STYLE ANCHOR: attach (\S+\.jpg)/.exec(t)?.[1];
+  if (file) return `${t.split("\n\n")[0]}\nAnchor image file on this computer: ${join(PRESET_DIR, file)}\n\n`;
+  return t.startsWith("NOTE: this look has no style anchor") ? `${t.split("\n\n")[0]}\nCall style_presets to get its character-sheet prompt.\n\n` : "";
+};
+const withoutAnchorLine = (t: string) => t.replace(/^(STYLE ANCHOR|NOTE: this look)[^\n]*\n\n/, "");
 
 type Summary = { id: string; title: string | null; topic: string; status: string; next: string | null; message: string; progress: number; error: string | null; video: string | null; seconds: number };
 
@@ -124,20 +133,78 @@ server.registerTool(
   "produce_slideshow",
   {
     description: `Create an image slideshow video from a script you wrote (call slideshow_guide first for the rules and JSON shape). The app records the narration now and returns one image prompt per scene; give those prompts to the user to generate (any image tool, 16:9 or 9:16 to match the format), then import_slide_images, then render_video.
-slideshow = {title, preset:"stickman"|"", style, subjects:[{name,look}], settings:{format,language,voice,speed,music,musicVolume,captions}, scenes:[{narration, prompt, subjects:[names], camera, intensity, focus:[x,y]|null, transition, label, voice}]}
+slideshow = {title, preset:"${SS.presetKeys.join('"|"')}"|"", style, subjects:[{name,look}], settings:{format,language,voice,speed,music,musicVolume,captions}, scenes:[{narration, prompt, subjects:[names], camera, intensity, focus:[x,y]|null, transition, label, voice}]}
 camera: ${SS.SLIDE_CAMERAS.join(",")} | intensity: ${SS.INTENSITIES.join(",")} | transition: ${SS.SLIDE_TRANSITIONS.join(",")} | captions: ${SS.CAPTION_STYLES.join(",")}
 Choices in slideshow.settings are used unless you also pass format/language/voice here.`,
     inputSchema: {
       slideshow: z.record(z.string(), z.unknown()).describe("Slideshow object as described"),
-      preset: z.enum(["stickman"]).optional().describe("Built-in look: stickman = white stickman comic with a fixed main character (overrides slideshow.preset)"),
+      preset: z.enum(SS.presetKeys as [SS.PresetKey, ...SS.PresetKey[]]).optional().describe(`Built-in look with a fixed hero and matching scenery (overrides slideshow.preset): ${SS.presetKeys.map((k) => `${k} = ${SS.PRESETS[k].label} (hero ${SS.PRESETS[k].hero})`).join("; ")}`),
       ...settingsShape,
     },
   },
   async (a) => {
     try {
-      const out = await api<Summary[]>("POST", "/api/slideshows", { slideshow: a.preset ? { ...a.slideshow, preset: a.preset } : a.slideshow, settings: slideshowSettings(a) });
+      const out = await api<(Summary & { warnings?: string[] })[]>("POST", "/api/slideshows", { slideshow: a.preset ? { ...a.slideshow, preset: a.preset } : a.slideshow, settings: slideshowSettings(a) });
       const r = await api<{ prompts: unknown[]; text: string }>("GET", `/api/projects/${out[0].id}/slide-prompts`);
-      return text(`Created slideshow ${out[0].id} with ${r.prompts.length} scenes; narration is being recorded.\nGive the user the prompts below (one image each, saved as slide-01.png, slide-02.png ...). When the images exist, call import_slide_images, then render_video.\n\n${r.text}`);
+      return text(`Created slideshow ${out[0].id} with ${r.prompts.length} scenes; narration is being recorded.${out[0].warnings?.length ? `\nSCRIPT WARNINGS (fix with edit_slideshow, then re-send the prompts):\n${out[0].warnings.map((w) => `- ${w}`).join("\n")}\n` : ""}\nGive the user the prompts below (one image each, saved as slide-01.png, slide-02.png ...). When the images exist, call import_slide_images, then render_video.\n\n${anchorLine(r.text)}${withoutAnchorLine(r.text)}`);
+    } catch (e) {
+      return fail(e);
+    }
+  },
+);
+
+type PresetRow = { key: string; label: string; blurb: string; hero: string; anchorFile: string; anchorUrl: string | null; anchorPrompt: string };
+
+server.registerTool(
+  "style_presets",
+  {
+    description: "The built-in looks for slideshows (preset values) with their hero and whether the style-anchor image (the hero's character sheet) exists. With prompts=true, also the character-sheet prompt for each look whose anchor is missing: give it to the user to generate once, then call import_style_anchor.",
+    inputSchema: { prompts: z.boolean().optional(), include_ready: z.boolean().optional().describe("With prompts, also print prompts of looks that already have an anchor") },
+  },
+  async (a) => {
+    try {
+      const rows = await api<PresetRow[]>("GET", "/api/presets");
+      return text(
+        rows
+          .map((p) => `${p.key} | ${p.label} | hero ${p.hero} | anchor ${p.anchorUrl ? `ready (${join(PRESET_DIR, p.anchorFile)})` : "missing"}\n${p.blurb}${a.prompts && (!p.anchorUrl || a.include_ready) ? `\nCHARACTER SHEET PROMPT:\n${p.anchorPrompt}` : ""}`)
+          .join("\n\n"),
+      );
+    } catch (e) {
+      return fail(e);
+    }
+  },
+);
+
+server.registerTool(
+  "import_style_anchor",
+  {
+    description: "Save a generated character sheet (from the style_presets prompt) as the style anchor of a look. Every slideshow prompt featuring that look's hero then tells the image generator to use it as reference.",
+    inputSchema: { preset: z.enum(SS.presetKeys as [SS.PresetKey, ...SS.PresetKey[]]), file_path: z.string().describe("Absolute path to a PNG, JPG or WEBP") },
+  },
+  async (a) => {
+    try {
+      await api("POST", `/api/presets/${a.preset}/anchor/import`, { path: a.file_path });
+      return text(`Saved the ${a.preset} anchor.`);
+    } catch (e) {
+      return fail(e);
+    }
+  },
+);
+
+server.registerTool(
+  "edit_slideshow",
+  {
+    description: "Change whole-slideshow fields of a slideshow: title, preset, style, subjects (full replacement list of {name, look, kind}), then re-derive its image prompts. Narration is untouched, so no re-voicing. People are described by OUTFIT AND PROPS only (their body comes from the look's hero); creatures and things get kind creature or thing and a full description.",
+    inputSchema: { id: z.string(), changes: z.record(z.string(), z.unknown()).describe("Fields to replace, e.g. {subjects:[...]} or {preset:'papercut'}") },
+  },
+  async (a) => {
+    try {
+      const p = await api<{ slideshow: SS.SlideshowT | null }>("GET", `/api/projects/${a.id}`);
+      if (!p.slideshow) throw new Error("Not a slideshow");
+      const next = { ...p.slideshow, ...a.changes };
+      await api("PUT", `/api/projects/${a.id}/slideshow`, { slideshow: next });
+      const warnings = SS.lintSlideshow(SS.normalizeSlideshow(next));
+      return text(`Saved.${warnings.length ? `\nSCRIPT WARNINGS:\n${warnings.map((w) => `- ${w}`).join("\n")}` : ""}\nCall slide_prompts for the updated prompts.`);
     } catch (e) {
       return fail(e);
     }
@@ -152,10 +219,10 @@ server.registerTool(
   },
   async (a) => {
     try {
-      const r = await api<{ prompts: { n: number; file: string; prompt: string; image: string | null }[] }>("GET", `/api/projects/${a.id}/slide-prompts`);
+      const r = await api<{ text: string; prompts: { n: number; file: string; prompt: string; image: string | null }[] }>("GET", `/api/projects/${a.id}/slide-prompts`);
       const rows = r.prompts.filter((x) => !a.only_missing || !x.image);
       if (!rows.length) return text("Every scene already has an image.");
-      return text(rows.map((x) => `SCENE ${x.n} (save as ${x.file}.png)${x.image ? " [has image]" : ""}\n${x.prompt}`).join("\n\n"));
+      return text(anchorLine(r.text) + rows.map((x) => `SCENE ${x.n} (save as ${x.file}.png)${x.image ? " [has image]" : ""}\n${x.prompt}`).join("\n\n"));
     } catch (e) {
       return fail(e);
     }

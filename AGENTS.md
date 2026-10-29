@@ -53,7 +53,8 @@ then `GET /api/projects` for status. `GET /api/script-guide` returns the writing
 ### B2. Image slideshow videos (images + camera moves + transitions + narration)
 Use when the user wants a documentary/explainer made from generated pictures instead of stick figures.
 1. `slideshow_guide` returns the rules, JSON shape, voices and music files. You decide structure, camera, transitions, voice, music.
-   Use `preset: "stickman"` (white stickman comic: app supplies the art style and the fixed hero "Stickman"; list him in a scene's `subjects`) for story/"what if" videos, or omit it and write your own `style`.
+   Pick a `preset` (stickman, sticker, clay3d, papercut, screenprint: each supplies art direction for characters AND scenery plus a fixed hero named in the guide; list the hero in a scene's `subjects`) or omit it and write your own `style`.
+   `style_presets` shows each look's anchor status; for a look with a missing anchor call `style_presets { prompts: true }`, give the user its character-sheet prompt, then `import_style_anchor`. Slideshow prompts also tell you which anchor file to hand over.
 2. `produce_slideshow { slideshow, format?, language?, voice? }` records the narration and **returns one image prompt per scene**.
    Give those prompts to the user verbatim (they generate the images; file names `slide-01.png` ...).
 3. When the images exist: `import_slide_images { id, file_paths }` (scene order), then `render_video { id }`.
@@ -122,6 +123,8 @@ then run `npm run typecheck` and check with `npm run stills`. Scripts can only u
 
 ## 7. Pitfalls
 
+- After changing slideshow looks or prompt rules, run `npm run check`: it typechecks and asserts that every look builds side characters, crowds and extras on the hero's figure (never realistic humans), attaches the anchor, and leaves creatures alone.
+- Slideshow subjects need a `kind` (person, creature, thing); describe people by outfit and props only. `produce_slideshow` and `edit_slideshow` return warnings when a script would pull characters off-style.
 - MCP tool errors saying "app is not running": start `npm run app`.
 - Narration and rendering are sequential and slow (minutes per video). Queue in batches and poll rather than blocking.
 - `edit_scene` keeps existing voice-over if narration is unchanged, so visual edits re-render quickly.

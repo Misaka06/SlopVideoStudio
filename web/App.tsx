@@ -7,6 +7,7 @@ import { CharactersPage } from "./Characters";
 import { PropsPage, PropsPanel } from "./Props";
 import { fmtTime, Progress, SettingsForm, Sel, StatusPill } from "./ui";
 import { SlideshowNewPanel, SlideshowView } from "./Slideshow";
+import { StylesPage } from "./Styles";
 import { api, type BackgroundEntry, type Config, type EpisodeT, type ProjectView as ProjectData, type Settings, type Summary } from "./api";
 
 export const App: React.FC = () => {
@@ -60,6 +61,9 @@ export const App: React.FC = () => {
         <button className={`libbtn ${selected === CHARACTERS ? "on" : ""}`} onClick={() => setSelected(CHARACTERS)}>
           Character library
         </button>
+        <button className={`libbtn ${selected === STYLES ? "on" : ""}`} onClick={() => setSelected(STYLES)}>
+          Style anchors
+        </button>
         <div className="plist">
           {projects.length === 0 && <p className="muted small">No videos yet.</p>}
           {projects.map((p) => (
@@ -89,6 +93,8 @@ export const App: React.FC = () => {
           <PropsPage config={config} />
         ) : selected === CHARACTERS ? (
           <CharactersPage />
+        ) : selected === STYLES ? (
+          <StylesPage />
         ) : projects.find((p) => p.id === selected)?.kind === "slideshow" ? (
           <SlideshowView key={selected} id={selected} config={config} summary={projects.find((p) => p.id === selected)} onDeleted={() => setSelected(null)} />
         ) : (
@@ -102,6 +108,7 @@ export const App: React.FC = () => {
 const LIBRARY = "__library";
 const PROPS = "__props";
 const CHARACTERS = "__characters";
+const STYLES = "__styles";
 
 // ---------------------------------------------------------------- New videos
 

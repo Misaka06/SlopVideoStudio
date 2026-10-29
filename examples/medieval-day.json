@@ -3,6 +3,7 @@
   "preset": "stickman",
   "style": "",
   "subjects": [
+    { "name": "Stickman", "look": "wearing a worn olive-green wool tunic with a rope belt and a straw hat (he takes the hat off when indoors, and in bed he keeps only the tunic under a patched blanket)" },
     { "name": "Vaca", "look": "a stocky red-brown cow with a white muzzle, short pale horns, big calm eyes and a pink nose" },
     { "name": "Edith", "look": "a second stickman with the same round white head and thin black stick body, wearing a faded blue dress, a white linen headscarf and a flour-dusted apron" }
   ],

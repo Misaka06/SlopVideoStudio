@@ -1,6 +1,6 @@
 import type { EpisodeT } from "../src/schema";
 import type { Project, Settings, StageName } from "../core/store";
-import type { SlideshowT, SlideTimeline } from "../src/slides";
+import type { PresetKey, SlideshowT, SlideTimeline } from "../src/slides";
 
 export type Summary = {
   id: string;
@@ -41,6 +41,10 @@ export type PropEntry = {
   front: boolean; builtin: boolean; prompt: string; url: string | null; animated: boolean; scenes?: number[];
 };
 export type ProjectView = Project & { backgrounds: BackgroundEntry[]; props: PropEntry[] };
+export type PresetEntry = {
+  key: PresetKey; label: string; blurb: string; hero: string; style: string; look: string;
+  anchorPrompt: string; anchorFile: string; anchorUrl: string | null; tests: { label: string; prompt: string }[];
+};
 export type SlidePrompt = { n: number; file: string; narration: string; camera: string; prompt: string; image: string | null };
 export type SlideshowView = Project & { slideshow: SlideshowT; slideTimeline: SlideTimeline; prompts: SlidePrompt[]; promptsText: string };
 export type CharacterEntry = { name: string; torso: string | null; topper: string | null; sleeve: string | null; updatedAt: number };
@@ -79,6 +83,8 @@ export const api = {
   create: (body: { episode: EpisodeT; settings: Partial<Settings>; until: StageName }) => call<Summary[]>("POST", "/api/projects", body),
   saveEpisode: (id: string, episode: EpisodeT, settings?: Partial<Settings>) => call<Project>("PUT", `/api/projects/${id}/episode`, { episode, settings }),
   run: (id: string, from: StageName, until: StageName = "render", allowMissing = false) => call<Summary>("POST", `/api/projects/${id}/run`, { from, until, allowMissing }),
+  presets: () => call<PresetEntry[]>("GET", "/api/presets"),
+  uploadAnchor: (key: string, file: File) => upload<PresetEntry>(`/api/presets/${key}/anchor`, file),
   slideshowGuide: () => call<{ guide: string }>("GET", "/api/slideshow-guide"),
   createSlideshow: (body: { slideshow: unknown; settings: Partial<Settings> }) => call<Summary[]>("POST", "/api/slideshows", body),
   getSlideshow: (id: string) => call<SlideshowView>("GET", `/api/projects/${id}`),

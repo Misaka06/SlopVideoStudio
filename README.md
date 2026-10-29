@@ -76,9 +76,16 @@ structure, camera move, transition, voice and music per video; **you generate th
 
 1. **Script.** Ask your MCP assistant for a slideshow (`slideshow_guide` → `produce_slideshow`), or open **New videos →
    Image slideshow**, press *Copy brief for my AI chat*, paste the reply's JSON back and press *Create slideshow*
-   (sample: `examples/medieval-day.json`). The narration is recorded straight away. Pick a **Look**: *White stickman comic*
-   (a built-in art direction plus a fixed round-headed stickman hero, so every image matches: thick ink outlines, dark
-   detailed scenes) or a free style the AI invents. In JSON: `"preset": "stickman"`.
+   (sample: `examples/medieval-day.json`). The narration is recorded straight away. Pick a **Look** (each has its own hero character and matching scenery, so characters and backgrounds stay coherent):
+   *White stickman comic* (dark comic-ink scenes), *Sticker stickmen* (flat vector, die-cut white outlines, pastel backdrops),
+   *3D clay stickmen* (vinyl-toy figures in miniature dioramas), *Paper cut-out world* (layered paper craft) and *Retro screen-print poster*
+   (four inks, halftone), or a free style the AI invents. In JSON: `"preset": "stickman" | "sticker" | "clay3d" | "papercut" | "screenprint"`.
+   Every look has a **style anchor**: the hero's character sheet. Open **Style anchors** in the sidebar, copy a look's anchor prompt, generate
+   the sheet once in any image tool, then drop or paste it (click the card, Ctrl+V). Prompts that feature the hero then start with
+   "Use the attached reference image…", and the app shows the anchor with *Copy image* / *Download* so you can attach it to those requests.
+   Side characters, crowds and extras are built on the hero's figure automatically (prompts add a "people rule" and the anchor
+   as reference), so define recurring ones by outfit and props only; creatures are described fully in the look's materials.
+   Each look also has test prompts to judge the style and its scenery before you commit (`assets/presets/<look>-anchor.jpg` holds the images).
 2. **Images.** The project page lists one prompt per scene (the shared art style and the recurring characters' looks
    are woven in, with the aspect ratio and a composition hint for the camera move). *Copy prompt* / *Copy all prompts*,
    generate in any image tool, then **paste with Ctrl+V** (copy the image, press Ctrl+V on the page: it fills the highlighted
