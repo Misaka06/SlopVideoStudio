@@ -1,0 +1,47 @@
+{
+  "title": "¿Qué hacía REALMENTE la gente en la Edad Media todo el día?",
+  "preset": "stickman",
+  "style": "",
+  "subjects": [
+    { "name": "Vaca", "look": "a stocky red-brown cow with a white muzzle, short pale horns, big calm eyes and a pink nose" },
+    { "name": "Edith", "look": "a second stickman with the same round white head and thin black stick body, wearing a faded blue dress, a white linen headscarf and a flour-dusted apron" }
+  ],
+  "settings": { "format": "landscape", "language": "es", "voice": "em_alex", "speed": 1.0, "music": null, "captions": "bold" },
+  "scenes": [
+    {
+      "narration": "Imagina despertar en el año 1300 dentro de un establo helado, compartiendo habitación con tu vaca. Y esa era la versión de lujo.",
+      "prompt": "Stickman lying on a bed of straw under a patched brown blanket, shivering with a frightened face and chattering lines around his head, breath fogging, a dying campfire ring of stones glowing orange beside him, smoke curling up, a cow watching from a wooden pen in a dark stone barn with a hole in the thatched roof letting in a shaft of cold moonlight, a thermometer in the corner of the frame reading 2 degrees",
+      "subjects": ["Stickman", "Vaca"], "camera": "zoomIn", "intensity": "subtle", "focus": [0.2, 0.72], "transition": "crossfade", "label": "Inglaterra, 1300", "voice": ""
+    },
+    {
+      "narration": "Antes de que salga el sol toda tu familia ya está en pie, porque la luz del día es la única que puedes pagar.",
+      "prompt": "Wide establishing shot of a misty medieval English village at dawn, thatched cottages with chimney smoke, a muddy path, a stone church in the distance, tiny stickman villagers carrying tools toward golden fields",
+      "subjects": [], "camera": "panRight", "intensity": "normal", "focus": null, "transition": "cut", "label": "", "voice": ""
+    },
+    {
+      "narration": "El desayuno es pan duro mojado en sopa de ayer. Si hay suerte, un poco de cerveza floja. Sí, para los niños también.",
+      "prompt": "Stickman sitting at a rough wooden table in a smoky one-room cottage, dunking a hard dark bread crust into a wooden bowl of thin grey soup with a disgusted but resigned face, a clay mug of beer beside the bowl, a single candle, cooking pot over the hearth in the background",
+      "subjects": ["Stickman"], "camera": "zoomIn", "intensity": "normal", "focus": [0.5, 0.6], "transition": "crossfade", "label": "", "voice": ""
+    },
+    {
+      "narration": "Luego, a arar. Doce horas empujando un arado de madera detrás de dos bueyes, en la tierra de un señor que casi nunca verás.",
+      "prompt": "Stickman straining behind a heavy wooden plow pulled by two oxen across a muddy field at sunrise, sweat drops flying, exhausted face, long shadows, a flock of crows following the furrow, a distant manor house on a hill",
+      "subjects": ["Stickman"], "camera": "panLeft", "intensity": "strong", "focus": null, "transition": "slideLeft", "label": "12 horas de trabajo", "voice": ""
+    },
+    {
+      "narration": "Mientras tanto, Edith muele grano, cuida el huerto, hila lana y cocina. Y nadie le pregunta si está cansada.",
+      "prompt": "Edith turning a heavy stone hand-mill in a bright farmyard with a tired deadpan face, chickens at her feet, wool drying on a line, a vegetable garden and a bucket well behind her",
+      "subjects": ["Edith"], "camera": "zoomOut", "intensity": "normal", "focus": [0.4, 0.55], "transition": "crossfade", "label": "", "voice": ""
+    },
+    {
+      "narration": "Pero hay un detalle sorprendente: tenían más días festivos que tú. Casi un tercio del año.",
+      "prompt": "Joyful village festival in a green meadow, Stickman and Edith dancing wildly around a maypole with colorful ribbons, huge happy grins, a fiddler stickman playing, bunting between trees, a cow wearing a flower crown watching",
+      "subjects": ["Stickman", "Edith", "Vaca"], "camera": "pushIn", "intensity": "normal", "focus": [0.5, 0.5], "transition": "flash", "label": "Más de 100 días libres", "voice": ""
+    },
+    {
+      "narration": "Así que la próxima vez que te quejes del lunes, recuerda a ese pobre tipo temblando junto a su vaca.",
+      "prompt": "Stickman sitting on a wooden fence at golden sunset hugging his cow, a calm smile, warm light, silhouettes of cottages and fields behind them",
+      "subjects": ["Stickman", "Vaca"], "camera": "zoomOut", "intensity": "subtle", "focus": null, "transition": "dip", "label": "", "voice": ""
+    }
+  ]
+}

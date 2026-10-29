@@ -1,10 +1,13 @@
 import type { EpisodeT } from "../src/schema";
 import type { Project, Settings, StageName } from "../core/store";
+import type { SlideshowT, SlideTimeline } from "../src/slides";
 
 export type Summary = {
   id: string;
   topic: string;
   title: string | null;
+  kind: "episode" | "slideshow";
+  imagesMissing: number;
   status: Project["status"];
   next: StageName | null;
   message: string;
@@ -38,6 +41,8 @@ export type PropEntry = {
   front: boolean; builtin: boolean; prompt: string; url: string | null; animated: boolean; scenes?: number[];
 };
 export type ProjectView = Project & { backgrounds: BackgroundEntry[]; props: PropEntry[] };
+export type SlidePrompt = { n: number; file: string; narration: string; camera: string; prompt: string; image: string | null };
+export type SlideshowView = Project & { slideshow: SlideshowT; slideTimeline: SlideTimeline; prompts: SlidePrompt[]; promptsText: string };
 export type CharacterEntry = { name: string; torso: string | null; topper: string | null; sleeve: string | null; updatedAt: number };
 export type NewProp ={ name: string; description: string; kind: "set" | "held"; size: string; grip?: string; front?: boolean };
 
@@ -73,8 +78,14 @@ export const api = {
   removeProp: (key: string) => call<{ ok: true }>("DELETE", `/api/props/${key}`),
   create: (body: { episode: EpisodeT; settings: Partial<Settings>; until: StageName }) => call<Summary[]>("POST", "/api/projects", body),
   saveEpisode: (id: string, episode: EpisodeT, settings?: Partial<Settings>) => call<Project>("PUT", `/api/projects/${id}/episode`, { episode, settings }),
-  run: (id: string, from: StageName, until: StageName = "render") => call<Summary>("POST", `/api/projects/${id}/run`, { from, until }),
+  run: (id: string, from: StageName, until: StageName = "render", allowMissing = false) => call<Summary>("POST", `/api/projects/${id}/run`, { from, until, allowMissing }),
+  slideshowGuide: () => call<{ guide: string }>("GET", "/api/slideshow-guide"),
+  createSlideshow: (body: { slideshow: unknown; settings: Partial<Settings> }) => call<Summary[]>("POST", "/api/slideshows", body),
+  getSlideshow: (id: string) => call<SlideshowView>("GET", `/api/projects/${id}`),
+  saveSlideshow: (id: string, slideshow: SlideshowT, settings?: Partial<Settings>) => call<Project>("PUT", `/api/projects/${id}/slideshow`, { slideshow, settings }),
+  uploadSlideImage: (id: string, n: number, file: File) => upload<{ ok: true }>(`/api/projects/${id}/slides/${n}/image`, file),
+  removeSlideImage: (id: string, n: number) => call<{ ok: true }>("DELETE", `/api/projects/${id}/slides/${n}/image`),
   remove: (id: string) => call<{ ok: true }>("DELETE", `/api/projects/${id}`),
 };
 
-export type { Project, Settings, StageName, EpisodeT };
+export type { Project, Settings, StageName, EpisodeT, SlideshowT, SlideTimeline };

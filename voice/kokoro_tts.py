@@ -2,7 +2,7 @@
 
 Usage: python voice/kokoro_tts.py job.json
 job.json: {"voice": "am_michael", "lang": "en-us", "speed": 1.0,
-           "items": [{"text": "...", "out": "path/to/scene-01.wav"}, ...]}
+           "items": [{"text": "...", "out": "path/to/scene-01.wav", "voice": "optional override"}, ...]}
 Prints one JSON line per item: {"out": ..., "duration": seconds}
 The model loads once, so a whole episode costs a single startup.
 """
@@ -23,7 +23,7 @@ def main() -> None:
     for item in job["items"]:
         samples, rate = kokoro.create(
             item["text"],
-            voice=job.get("voice", "am_michael"),
+            voice=item.get("voice") or job.get("voice", "am_michael"),
             speed=float(job.get("speed", 1.0)),
             lang=job.get("lang", "en-us"),
         )

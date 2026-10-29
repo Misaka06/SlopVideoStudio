@@ -6,7 +6,9 @@ import { fixEpisode } from "./script";
 import { withLibrary } from "./backgrounds";
 import { renderVideo } from "./render";
 import * as store from "./store";
-import { voiceEpisode } from "./voice";
+import { draftSlideTimeline, type SlideshowT } from "../src/slides";
+import { fixSlideshow, missingImages, timelineFor } from "./slideshow";
+import { VOICES, voiceEpisode, voiceSlideshow } from "./voice";
 import type { Project, Settings, StageName } from "./store";
 
 const ORDER: StageName[] = ["voice", "render"];
@@ -45,12 +47,70 @@ export function create(opts: { episode: EpisodeT; settings?: Partial<Settings>; 
   return p;
 }
 
+const clean = <T extends object>(o: T | undefined) => Object.fromEntries(Object.entries(o ?? {}).filter(([, v]) => v !== undefined)) as Partial<T>;
+
+// Slideshows voice first (so lengths are known) and wait for the user's images before rendering.
+// Settings: defaults < the writer's own choices in the script < explicit settings from the caller.
+export function createSlideshow(opts: { slideshow: SlideshowT; settings?: Partial<Settings> }) {
+  const show = fixSlideshow(opts.slideshow);
+  if (!show.scenes.length) throw new Error("The slideshow has no scenes with narration");
+  const w = show.settings;
+  const settings: Settings = { ...store.DEFAULT_SETTINGS, ...clean({ format: w.format, lang: w.lang, voice: w.voice, speed: w.speed, music: w.music, musicVolume: w.musicVolume, captions: w.captions }), ...clean(opts.settings) };
+  // A voice must belong to the chosen language.
+  if (!VOICES[settings.lang].some((v) => v.id === settings.voice)) settings.voice = VOICES[settings.lang][0].id;
+  const p: Project = {
+    id: store.newId(show.title),
+    topic: show.title,
+    settings,
+    status: "queued",
+    next: "voice",
+    until: "voice",
+    message: "Waiting in queue",
+    progress: 0,
+    error: null,
+    episode: null,
+    timeline: null,
+    slideshow: show,
+    slides: null,
+    video: null,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  };
+  p.slides = draftSlideTimeline(show, { format: settings.format, music: null, musicVolume: settings.musicVolume, captions: settings.captions });
+  store.save(p);
+  pump();
+  return p;
+}
+
+export function updateSlideshow(id: string, raw: unknown, settings?: Partial<Settings>) {
+  const p = store.get(id);
+  if (!p?.slideshow) throw new Error(`No slideshow ${id}`);
+  if (p.status === "running") throw new Error("Project is busy; wait until the current stage finishes");
+  const show = fixSlideshow(raw);
+  if (!show.scenes.length) throw new Error("The slideshow has no scenes with narration");
+  const s = { ...p.settings, ...settings };
+  // Same narration and voice per scene: keep the recording and only render again.
+  const old = p.slides;
+  const voiced = Boolean(old) && old!.scenes.length === show.scenes.length && old!.scenes.every((t, i) => t.audio && t.narration === show.scenes[i].narration && t.voice === show.scenes[i].voice);
+  const voiceSame = !settings || (["voice", "lang", "speed"] as const).every((k) => settings[k] === undefined || settings[k] === p.settings[k]);
+  if (voiced && voiceSame && old) {
+    const slides = { ...old, scenes: old.scenes.map((t, i) => ({ ...t, ...show.scenes[i] })) };
+    return store.save({ ...p, settings: s, slideshow: show, slides, status: "idle", next: "render", message: "Edited — render again to update the video" });
+  }
+  const slides = draftSlideTimeline(show, { format: s.format, music: null, musicVolume: s.musicVolume, captions: s.captions });
+  return store.save({ ...p, settings: s, slideshow: show, slides, video: null, status: "idle", next: "voice", message: "Edited — voice and render again to update the video" });
+}
+
 // Re-queue a project from a given stage (e.g. after editing the script).
-export function runFrom(id: string, from: StageName, until: StageName = "render") {
+export function runFrom(id: string, from: StageName, until: StageName = "render", opts: { allowMissing?: boolean } = {}) {
   const p = store.get(id);
   if (!p) throw new Error(`No project ${id}`);
   if (p.status === "running") throw new Error("Project is busy; wait until the current stage finishes");
-  if (!p.episode) throw new Error("This project has no script yet");
+  if (!p.episode && !p.slideshow) throw new Error("This project has no script yet");
+  if (p.slideshow && until === "render" && !opts.allowMissing) {
+    const missing = missingImages(p);
+    if (missing.length) throw new Error(`Add the images first: scene${missing.length > 1 ? "s" : ""} ${missing.join(", ")} still ${missing.length > 1 ? "have" : "has"} no image (or render with placeholders on purpose)`);
+  }
   store.save({ ...p, status: "queued", next: from, until, error: null, message: "Waiting in queue", progress: 0 });
   pump();
 }
@@ -89,23 +149,23 @@ async function runStage(p: Project, stage: StageName) {
   const set = (patch: Partial<Project>) => store.save({ ...store.get(p.id)!, ...patch });
   set({ status: "running", message: { voice: "Recording narration", render: "Rendering video" }[stage], progress: 0 });
   try {
-    if (stage === "voice") {
-      const cur = store.get(p.id)!;
-      const timeline = await voiceEpisode(p.id, cur.episode!, cur.settings, (progress) => set({ progress }));
-      set({ timeline });
-    } else {
-      const cur = store.get(p.id)!;
-      const video = await renderVideo(p.id, withLibrary(cur.timeline!, cur.settings), port, (progress) => set({ progress }));
-      set({ video });
-    }
     const cur = store.get(p.id)!;
+    if (stage === "voice") {
+      if (cur.slideshow) set({ slides: await voiceSlideshow(p.id, cur.slideshow, cur.settings, (progress) => set({ progress })) });
+      else set({ timeline: await voiceEpisode(p.id, cur.episode!, cur.settings, (progress) => set({ progress })) });
+    } else if (cur.slideshow) {
+      set({ video: await renderVideo(p.id, timelineFor(cur), port, (progress) => set({ progress }), "Slideshow") });
+    } else {
+      set({ video: await renderVideo(p.id, withLibrary(cur.timeline!, cur.settings), port, (progress) => set({ progress })) });
+    }
+    const after = store.get(p.id)!;
     const i = ORDER.indexOf(stage);
-    const done = stage === cur.until;
+    const done = stage === after.until;
     set({
       status: done ? (stage === "render" ? "done" : "idle") : "queued",
       next: i + 1 < ORDER.length ? ORDER[i + 1] : null,
       progress: 1,
-      message: done ? (stage === "render" ? "Video ready" : "Narration ready") : "Waiting in queue",
+      message: done ? (stage === "render" ? "Video ready" : after.slideshow ? "Narration ready — add the images, then render" : "Narration ready") : "Waiting in queue",
     });
   } catch (e) {
     set({ status: "error", error: e instanceof Error ? e.message : String(e), message: `Failed while ${stage === "voice" ? "recording narration" : "rendering"}` });

@@ -5,6 +5,8 @@ import { draftTimeline, FPS, totalFrames, type CastT, type SceneCharT, type Scen
 import example from "../examples/time-loop.json";
 import { CharactersPage } from "./Characters";
 import { PropsPage, PropsPanel } from "./Props";
+import { fmtTime, Progress, SettingsForm, Sel, StatusPill } from "./ui";
+import { SlideshowNewPanel, SlideshowView } from "./Slideshow";
 import { api, type BackgroundEntry, type Config, type EpisodeT, type ProjectView as ProjectData, type Settings, type Summary } from "./api";
 
 export const App: React.FC = () => {
@@ -29,6 +31,11 @@ export const App: React.FC = () => {
   }, []);
 
   const active = projects.filter((p) => p.status === "running" || p.status === "queued").length;
+  // Show a new project at once (the list only refreshes every 1.5 s), so the right screen opens.
+  const created = (s: Summary) => {
+    setProjects((all) => [s, ...all.filter((p) => p.id !== s.id)]);
+    setSelected(s.id);
+  };
 
   return (
     <div className="app">
@@ -57,7 +64,7 @@ export const App: React.FC = () => {
           {projects.length === 0 && <p className="muted small">No videos yet.</p>}
           {projects.map((p) => (
             <button key={p.id} className={`pitem ${selected === p.id ? "on" : ""}`} onClick={() => setSelected(p.id)}>
-              <div className="ptitle">{p.title ?? p.topic}</div>
+              <div className="ptitle">{p.kind === "slideshow" ? "🖼 " : ""}{p.title ?? p.topic}</div>
               <div className="pmeta">
                 <StatusPill p={p} />
                 <span className="muted small">
@@ -75,13 +82,15 @@ export const App: React.FC = () => {
         {!config ? (
           <p className="muted">Loading…</p>
         ) : selected === null ? (
-          <NewPanel config={config} onCreated={(id) => setSelected(id)} />
+          <NewPanel config={config} onCreated={created} />
         ) : selected === LIBRARY ? (
           <LibraryPage />
         ) : selected === PROPS ? (
           <PropsPage config={config} />
         ) : selected === CHARACTERS ? (
           <CharactersPage />
+        ) : projects.find((p) => p.id === selected)?.kind === "slideshow" ? (
+          <SlideshowView key={selected} id={selected} config={config} summary={projects.find((p) => p.id === selected)} onDeleted={() => setSelected(null)} />
         ) : (
           <ProjectView key={selected} id={selected} config={config} summary={projects.find((p) => p.id === selected)} onDeleted={() => setSelected(null)} />
         )}
@@ -94,22 +103,24 @@ const LIBRARY = "__library";
 const PROPS = "__props";
 const CHARACTERS = "__characters";
 
-const fmtTime = (s: number) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`;
-
-const StatusPill: React.FC<{ p: Pick<Summary, "status" | "message" | "next"> }> = ({ p }) => {
-  const label = p.status === "running" ? p.message : p.status === "queued" ? "Queued" : p.status === "done" ? "Ready" : p.status === "error" ? "Error" : p.next === "voice" ? "Script ready" : "Idle";
-  return <span className={`pill ${p.status}`}>{label}</span>;
-};
-
-const Progress: React.FC<{ value: number }> = ({ value }) => (
-  <div className="progress">
-    <div style={{ width: `${Math.round(value * 100)}%` }} />
-  </div>
-);
-
 // ---------------------------------------------------------------- New videos
 
-const NewPanel: React.FC<{ config: Config; onCreated: (id: string) => void }> = ({ config, onCreated }) => {
+const NewPanel: React.FC<{ config: Config; onCreated: (s: Summary) => void }> = ({ config, onCreated }) => {
+  const [mode, setMode] = useState<"episode" | "slideshow">("episode");
+  return (
+    <>
+      <div className="panel narrow modebar">
+        <div className="seg">
+          <button className={mode === "episode" ? "on" : ""} onClick={() => setMode("episode")}>Stick-figure episode</button>
+          <button className={mode === "slideshow" ? "on" : ""} onClick={() => setMode("slideshow")}>Image slideshow</button>
+        </div>
+      </div>
+      {mode === "episode" ? <EpisodePanel config={config} onCreated={onCreated} /> : <SlideshowNewPanel config={config} onCreated={onCreated} />}
+    </>
+  );
+};
+
+const EpisodePanel: React.FC<{ config: Config; onCreated: (s: Summary) => void }> = ({ config, onCreated }) => {
   const [scriptText, setScriptText] = useState("");
   const [s, setS] = useState<Settings>(config.defaults);
   const [busy, setBusy] = useState(false);
@@ -120,7 +131,7 @@ const NewPanel: React.FC<{ config: Config; onCreated: (id: string) => void }> = 
     setErr(null);
     try {
       const created = await api.create({ episode: JSON.parse(scriptText), settings: s, until: "render" });
-      if (created.length) onCreated(created[0].id);
+      if (created.length) onCreated(created[0]);
     } catch (e) {
       setErr(e instanceof Error ? e.message : String(e));
     } finally {
@@ -148,53 +159,6 @@ const NewPanel: React.FC<{ config: Config; onCreated: (id: string) => void }> = 
     </div>
   );
 };
-
-const SettingsForm: React.FC<{ config: Config; s: Settings; setS: (s: Settings) => void }> = ({ config, s, setS }) => {
-  const voices = config.voices[s.lang];
-  return (
-    <div className="grid settings">
-      <Field label="Format">
-        <div className="seg">
-          <button className={s.format === "landscape" ? "on" : ""} onClick={() => setS({ ...s, format: "landscape" })}>16:9 YouTube</button>
-          <button className={s.format === "vertical" ? "on" : ""} onClick={() => setS({ ...s, format: "vertical" })}>9:16 Shorts</button>
-        </div>
-      </Field>
-      <Field label="Language">
-        <select value={s.lang} onChange={(e) => { const lang = e.target.value as Settings["lang"]; setS({ ...s, lang, voice: config.voices[lang][0].id }); }}>
-          <option value="en-us">English (US)</option>
-          <option value="en-gb">English (UK)</option>
-          <option value="es">Spanish</option>
-        </select>
-      </Field>
-      <Field label="Voice">
-        <select value={s.voice} onChange={(e) => setS({ ...s, voice: e.target.value })}>
-          {voices.map((v) => <option key={v.id} value={v.id}>{v.label}</option>)}
-        </select>
-      </Field>
-      <Field label={`Speed ${s.speed.toFixed(2)}×`}>
-        <input type="range" min={0.8} max={1.3} step={0.05} value={s.speed} onChange={(e) => setS({ ...s, speed: Number(e.target.value) })} />
-      </Field>
-      <Field label="Music">
-        <select value={s.music ?? ""} onChange={(e) => setS({ ...s, music: e.target.value || null })}>
-          <option value="">None</option>
-          {config.music.map((m) => <option key={m} value={m}>{m}</option>)}
-        </select>
-      </Field>
-      <Field label="Backgrounds">
-        <label className="check">
-          <input type="checkbox" checked={s.imageBackgrounds !== false} onChange={(e) => setS({ ...s, imageBackgrounds: e.target.checked })} /> use library images when available
-        </label>
-      </Field>
-    </div>
-  );
-};
-
-const Field: React.FC<{ label: string; wide?: boolean; children: React.ReactNode }> = ({ label, wide, children }) => (
-  <div className={`field ${wide ? "wide" : ""}`}>
-    <label className="lbl">{label}</label>
-    {children}
-  </div>
-);
 
 // ---------------------------------------------------------------- Project page
 
@@ -358,12 +322,6 @@ const ProjectView: React.FC<{ id: string; config: Config; summary?: Summary; onD
     </div>
   );
 };
-
-const Sel: React.FC<{ value: string; options: readonly string[]; onChange: (v: string) => void; title?: string }> = ({ value, options, onChange, title }) => (
-  <select value={value} title={title} onChange={(e) => onChange(e.target.value)}>
-    {options.map((o) => <option key={o} value={o}>{o}</option>)}
-  </select>
-);
 
 const SceneCard: React.FC<{
   i: number;

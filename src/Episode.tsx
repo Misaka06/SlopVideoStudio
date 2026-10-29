@@ -503,7 +503,7 @@ const Hud: React.FC<{ text: string }> = ({ text }) => (
 );
 
 // A few words at a time; the word being spoken pops in yellow.
-const Captions: React.FC<{ words: TimedScene["words"]; sec: number; size: number; perLine: number }> = ({ words, sec, size, perLine }) => {
+export const Captions: React.FC<{ words: TimedScene["words"]; sec: number; size: number; perLine: number }> = ({ words, sec, size, perLine }) => {
   if (!words.length) return null;
   let idx = words.findIndex((w) => sec < w.end);
   if (idx === -1) idx = words.length - 1;

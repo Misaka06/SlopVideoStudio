@@ -11,6 +11,8 @@ import { scriptGuide } from "../core/script";
 import * as store from "../core/store";
 import { VOICES } from "../core/voice";
 import * as S from "../src/schema";
+import * as SS from "../src/slides";
+import * as slides from "../core/slideshow";
 
 const PORT = Number(process.env.PORT ?? 4000);
 const MUSIC_DIR = join(store.ROOT, "assets", "music");
@@ -23,15 +25,17 @@ app.use(express.json({ limit: "5mb" }));
 const summary = (p: store.Project) => ({
   id: p.id,
   topic: p.topic,
-  title: p.episode?.title ?? null,
+  title: p.episode?.title ?? p.slideshow?.title ?? null,
+  kind: p.slideshow ? ("slideshow" as const) : ("episode" as const),
   status: p.status,
   next: p.next,
   message: p.message,
   progress: p.progress,
   error: p.error,
   video: p.video,
-  scenes: p.episode?.scenes.length ?? 0,
-  seconds: p.timeline ? Math.round(p.timeline.scenes.reduce((n, s) => n + s.durationSec, 0)) : 0,
+  scenes: p.episode?.scenes.length ?? p.slideshow?.scenes.length ?? 0,
+  imagesMissing: p.slideshow ? slides.missingImages(p).length : 0,
+  seconds: Math.round((p.slideshow ? p.slides : p.timeline)?.scenes.reduce((n, s) => n + s.durationSec, 0) ?? 0),
   format: p.settings.format,
   createdAt: p.createdAt,
 });
@@ -58,6 +62,7 @@ app.get("/api/config", wrap(() => ({
     holds: [...S.HELD, ...props.customProps().filter((p) => p.kind === "held").map((p) => p.id)],
     set: [...S.SET_PIECES, ...props.customProps().filter((p) => p.kind === "set").map((p) => p.id)],
     grip: S.GRIP_CLASSES, camera: S.CAMERAS, transition: S.TRANSITIONS, effect: S.EFFECTS,
+    slideCamera: SS.SLIDE_CAMERAS, slideTransition: SS.SLIDE_TRANSITIONS, intensity: SS.INTENSITIES, captions: SS.CAPTION_STYLES,
   },
 })));
 
@@ -66,6 +71,7 @@ app.get("/api/projects", wrap(() => store.list().map(summary)));
 app.get("/api/projects/:id", wrap((req) => {
   const p = store.get(String(req.params.id));
   if (!p) throw new Error("Not found");
+  if (p.slideshow) return { ...p, slideTimeline: slides.timelineFor(p), prompts: slides.promptList(p), promptsText: slides.promptsText(p), backgrounds: [], props: [] };
   // The preview uses the same library images the render will use.
   return { ...p, timeline: bgs.withLibrary(p.timeline, p.settings), backgrounds: p.episode ? bgs.neededFor(p.episode) : [], props: p.episode ? props.neededFor(p.episode) : [] };
 }));
@@ -207,9 +213,57 @@ app.put("/api/projects/:id/episode", wrap((req) => {
 }));
 
 app.post("/api/projects/:id/run", wrap((req) => {
-  const { from = "voice", until = "render" } = req.body ?? {};
-  jobs.runFrom(String(req.params.id), from, until);
+  const { from = "voice", until = "render", allowMissing } = req.body ?? {};
+  jobs.runFrom(String(req.params.id), from, until, { allowMissing: Boolean(allowMissing) });
   return summary(store.get(String(req.params.id))!);
+}));
+
+// ---- image slideshows: the LLM writes the script; the user generates the images from the
+// prompts and drops them in (here or through the MCP server); then voice + render.
+
+app.get("/api/slideshow-guide", wrap(() => ({ guide: slides.slideshowGuide() })));
+
+// Body: { slideshow, settings? }. Narration is recorded right away; rendering waits for the images.
+app.post("/api/slideshows", wrap((req) => {
+  const { slideshow, settings } = req.body ?? {};
+  if (!slideshow) throw new Error("Give a slideshow (the script JSON)");
+  return [summary(jobs.createSlideshow({ slideshow, settings }))];
+}));
+
+app.put("/api/projects/:id/slideshow", wrap((req) => jobs.updateSlideshow(String(req.params.id), req.body.slideshow, req.body.settings)));
+
+app.get("/api/projects/:id/slide-prompts", wrap((req) => {
+  const p = store.get(String(req.params.id));
+  if (!p?.slideshow) throw new Error("Not a slideshow");
+  return { prompts: slides.promptList(p), text: slides.promptsText(p) };
+}));
+
+const slideProject = (req: express.Request) => {
+  const p = store.get(String(req.params.id));
+  if (!p?.slideshow) throw new Error("Not a slideshow");
+  if (p.status === "running" && p.next === "render") throw new Error("Project is rendering; wait until it finishes");
+  return p;
+};
+
+app.put("/api/projects/:id/slides/:n/image", express.raw({ type: "image/*", limit: "40mb" }), wrap(async (req) => {
+  if (!Buffer.isBuffer(req.body)) throw new Error("Send a PNG, JPG or WEBP image");
+  await slides.saveImage(slideProject(req), Number(req.params.n), req.body);
+  return { ok: true };
+}));
+
+// Import images already on this computer (used by the MCP server): { path } or { paths, start } to fill scenes in order.
+app.post("/api/projects/:id/slides/:n/import", wrap(async (req) => {
+  const p = slideProject(req);
+  const paths: string[] = Array.isArray(req.body?.paths) ? req.body.paths.map(String) : [String(req.body?.path ?? "")];
+  for (const path of paths) if (!existsSync(path)) throw new Error(`File not found: ${path}`);
+  const first = Number(req.params.n);
+  for (const [i, path] of paths.entries()) await slides.saveImage(p, first + i, readFileSync(path));
+  return { ok: true, imported: paths.length };
+}));
+
+app.delete("/api/projects/:id/slides/:n/image", wrap((req) => {
+  slides.removeImage(slideProject(req), Number(req.params.n));
+  return { ok: true };
 }));
 
 app.delete("/api/projects/:id", wrap((req) => {

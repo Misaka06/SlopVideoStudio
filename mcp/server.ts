@@ -8,6 +8,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { join } from "node:path";
 import { z } from "zod";
 import * as S from "../src/schema";
+import * as SS from "../src/slides";
 
 const BASE = process.env.ANIMATOR_URL ?? "http://localhost:4000";
 const PROJECTS = join(import.meta.dirname, "..", "projects");
@@ -93,6 +94,94 @@ camera: ${S.CAMERAS.join(",")} | transition: ${S.TRANSITIONS.join(",")} | effect
   },
 );
 
+// ---- image slideshows: you write the script (structure, camera moves, transitions, voice,
+// music); the app derives one copy-paste image prompt per scene for the user to generate.
+
+const slideshowSettings = (a: { format?: string; language?: string; voice?: string }) => {
+  const s: Record<string, unknown> = {};
+  if (a.format) s.format = a.format;
+  if (a.language) s.lang = a.language;
+  if (a.voice) s.voice = a.voice;
+  return s;
+};
+
+server.registerTool(
+  "slideshow_guide",
+  {
+    description: "Call this first when making an image slideshow video (images + camera moves + transitions + narration). Returns the writing rules, the JSON shape, and the voices and music files available.",
+    inputSchema: {},
+  },
+  async () => {
+    try {
+      return text((await api<{ guide: string }>("GET", "/api/slideshow-guide")).guide);
+    } catch (e) {
+      return fail(e);
+    }
+  },
+);
+
+server.registerTool(
+  "produce_slideshow",
+  {
+    description: `Create an image slideshow video from a script you wrote (call slideshow_guide first for the rules and JSON shape). The app records the narration now and returns one image prompt per scene; give those prompts to the user to generate (any image tool, 16:9 or 9:16 to match the format), then import_slide_images, then render_video.
+slideshow = {title, preset:"stickman"|"", style, subjects:[{name,look}], settings:{format,language,voice,speed,music,musicVolume,captions}, scenes:[{narration, prompt, subjects:[names], camera, intensity, focus:[x,y]|null, transition, label, voice}]}
+camera: ${SS.SLIDE_CAMERAS.join(",")} | intensity: ${SS.INTENSITIES.join(",")} | transition: ${SS.SLIDE_TRANSITIONS.join(",")} | captions: ${SS.CAPTION_STYLES.join(",")}
+Choices in slideshow.settings are used unless you also pass format/language/voice here.`,
+    inputSchema: {
+      slideshow: z.record(z.string(), z.unknown()).describe("Slideshow object as described"),
+      preset: z.enum(["stickman"]).optional().describe("Built-in look: stickman = white stickman comic with a fixed main character (overrides slideshow.preset)"),
+      ...settingsShape,
+    },
+  },
+  async (a) => {
+    try {
+      const out = await api<Summary[]>("POST", "/api/slideshows", { slideshow: a.preset ? { ...a.slideshow, preset: a.preset } : a.slideshow, settings: slideshowSettings(a) });
+      const r = await api<{ prompts: unknown[]; text: string }>("GET", `/api/projects/${out[0].id}/slide-prompts`);
+      return text(`Created slideshow ${out[0].id} with ${r.prompts.length} scenes; narration is being recorded.\nGive the user the prompts below (one image each, saved as slide-01.png, slide-02.png ...). When the images exist, call import_slide_images, then render_video.\n\n${r.text}`);
+    } catch (e) {
+      return fail(e);
+    }
+  },
+);
+
+server.registerTool(
+  "slide_prompts",
+  {
+    description: "Copy-paste image prompts of a slideshow, one per scene, with the file name each image should have. Marks scenes that already have an image.",
+    inputSchema: { id: z.string(), only_missing: z.boolean().optional() },
+  },
+  async (a) => {
+    try {
+      const r = await api<{ prompts: { n: number; file: string; prompt: string; image: string | null }[] }>("GET", `/api/projects/${a.id}/slide-prompts`);
+      const rows = r.prompts.filter((x) => !a.only_missing || !x.image);
+      if (!rows.length) return text("Every scene already has an image.");
+      return text(rows.map((x) => `SCENE ${x.n} (save as ${x.file}.png)${x.image ? " [has image]" : ""}\n${x.prompt}`).join("\n\n"));
+    } catch (e) {
+      return fail(e);
+    }
+  },
+);
+
+server.registerTool(
+  "import_slide_images",
+  {
+    description: "Add generated images from this computer to a slideshow. Give file_paths in scene order (they fill scenes start, start+1, ...). Replaces existing images. Then call render_video.",
+    inputSchema: {
+      id: z.string(),
+      file_paths: z.array(z.string()).min(1).describe("Absolute paths to PNG, JPG or WEBP files, in scene order"),
+      start: z.number().int().min(1).optional().describe("First scene to fill (default 1)"),
+    },
+  },
+  async (a) => {
+    try {
+      await api("POST", `/api/projects/${a.id}/slides/${a.start ?? 1}/import`, { paths: a.file_paths });
+      return text(`Imported ${a.file_paths.length} image(s) from scene ${a.start ?? 1}.`);
+    } catch (e) {
+      return fail(e);
+    }
+  },
+);
+
 server.registerTool(
   "video_status",
   {
@@ -116,7 +205,11 @@ server.registerTool(
   { description: "Compact script of one video: title, cast, then one line per scene.", inputSchema: { id: z.string() } },
   async ({ id }) => {
     try {
-      const p = await api<{ episode: S.EpisodeT | null }>("GET", `/api/projects/${id}`);
+      const p = await api<{ episode: S.EpisodeT | null; slideshow?: SS.SlideshowT | null }>("GET", `/api/projects/${id}`);
+      if (p.slideshow) {
+        const sh = p.slideshow;
+        return text(`${sh.title}\n${sh.preset ? `preset: ${sh.preset}\n` : ""}style: ${sh.style}\n${sh.scenes.map((s, i) => `${i + 1}. [${s.camera}/${s.transition}${s.label ? `; ${s.label}` : ""}] ${s.narration} | image: ${s.prompt}`).join("\n")}`);
+      }
       if (!p.episode) return text("No script yet.");
       const ep = p.episode;
       const scenes = ep.scenes.map((s, i) => `${i + 1}. [${s.bg}; ${s.chars.map((c) => `${c.name}:${c.pose}/${c.face}`).join(", ")}] ${s.narration}`);
@@ -140,7 +233,20 @@ server.registerTool(
   },
   async (a) => {
     try {
-      const p = await api<{ episode: S.EpisodeT | null }>("GET", `/api/projects/${a.id}`);
+      const p = await api<{ episode: S.EpisodeT | null; slideshow?: SS.SlideshowT | null }>("GET", `/api/projects/${a.id}`);
+      if (p.slideshow) {
+        const scenes = [...p.slideshow.scenes];
+        if (!scenes[a.scene - 1]) throw new Error(`Scene ${a.scene} does not exist (there are ${scenes.length})`);
+        scenes[a.scene - 1] = { ...scenes[a.scene - 1], ...a.changes } as SS.SlideSceneT;
+        const saved = await api<{ next: string }>("PUT", `/api/projects/${a.id}/slideshow`, { slideshow: { ...p.slideshow, scenes } });
+        if (a.render === false) return text("Saved.");
+        try {
+          await api("POST", `/api/projects/${a.id}/run`, { from: saved.next === "render" ? "render" : "voice", until: saved.next === "render" ? "render" : "voice" });
+          return text(saved.next === "render" ? "Saved; re-rendering." : "Saved; re-recording the narration (call render_video when it is ready).");
+        } catch (e) {
+          return text(`Saved. Not rendered: ${e instanceof Error ? e.message : String(e)}`);
+        }
+      }
       if (!p.episode) throw new Error("No script yet");
       const scenes = [...p.episode.scenes];
       if (!scenes[a.scene - 1]) throw new Error(`Scene ${a.scene} does not exist (there are ${scenes.length})`);
@@ -157,11 +263,14 @@ server.registerTool(
 
 server.registerTool(
   "render_video",
-  { description: "Voice (if needed) and render a video, e.g. after review_first or place_prop.", inputSchema: { id: z.string() } },
-  async ({ id }) => {
+  {
+    description: "Voice (if needed) and render a video, e.g. after review_first, place_prop or import_slide_images. A slideshow needs an image in every scene first.",
+    inputSchema: { id: z.string(), with_placeholders: z.boolean().optional().describe("Slideshow only: render even if some scenes have no image yet (placeholder cards)") },
+  },
+  async ({ id, with_placeholders }) => {
     try {
       const cur = await api<Summary>("GET", `/api/projects/${id}`);
-      const p = await api<Summary>("POST", `/api/projects/${id}/run`, { from: cur.next === "render" ? "render" : "voice", until: "render" });
+      const p = await api<Summary>("POST", `/api/projects/${id}/run`, { from: cur.next === "render" ? "render" : "voice", until: "render", allowMissing: with_placeholders });
       return text(line(p));
     } catch (e) {
       return fail(e);

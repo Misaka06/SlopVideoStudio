@@ -4,9 +4,11 @@ import { spawn } from "node:child_process";
 import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { estimateWords, FPS, type EpisodeT, type Timeline } from "../src/schema";
+import type { SlideshowT, SlideTimeline } from "../src/slides";
 import { ROOT, projectDir, type Settings } from "./store";
 
 const PAUSE_AFTER_SEC = 0.45;
+const SLIDE_PAUSE_SEC = 0.55;
 const PYTHON = process.env.PYTHON ?? "python";
 
 export const VOICES: Record<Settings["lang"], { id: string; label: string }[]> = {
@@ -31,12 +33,15 @@ export const VOICES: Record<Settings["lang"], { id: string; label: string }[]> =
   ],
 };
 
-export async function voiceEpisode(id: string, ep: EpisodeT, s: Settings, onProgress: (p: number) => void): Promise<Timeline> {
+export const audioUrl = (id: string, i: number) => `/media/${id}/audio/scene-${String(i + 1).padStart(2, "0")}.wav`;
+
+// One WAV per narration (optionally in another voice); returns each one's length in seconds.
+async function recordNarration(id: string, lines: { text: string; voice?: string }[], s: Settings, onProgress: (p: number) => void): Promise<number[]> {
   const audioDir = join(projectDir(id), "audio");
   rmSync(audioDir, { recursive: true, force: true });
   mkdirSync(audioDir, { recursive: true });
 
-  const items = ep.scenes.map((sc, i) => ({ text: sc.narration, out: join(audioDir, `scene-${String(i + 1).padStart(2, "0")}.wav`) }));
+  const items = lines.map((l, i) => ({ text: l.text, voice: l.voice || undefined, out: join(audioDir, `scene-${String(i + 1).padStart(2, "0")}.wav`) }));
   const jobFile = join(projectDir(id), "tts-job.json");
   writeFileSync(jobFile, JSON.stringify({ voice: s.voice, lang: s.lang, speed: s.speed, items }));
 
@@ -62,7 +67,11 @@ export async function voiceEpisode(id: string, ep: EpisodeT, s: Settings, onProg
     py.on("close", (code) => (code === 0 ? done() : fail(new Error(`Voice failed: ${err.trim().split("\n").slice(-3).join(" ")}`))));
   });
   rmSync(jobFile, { force: true });
+  return items.map((it) => durations.get(it.out) ?? 3);
+}
 
+export async function voiceEpisode(id: string, ep: EpisodeT, s: Settings, onProgress: (p: number) => void): Promise<Timeline> {
+  const speech = await recordNarration(id, ep.scenes.map((sc) => ({ text: sc.narration })), s, onProgress);
   return {
     title: ep.title,
     fps: FPS,
@@ -70,14 +79,32 @@ export async function voiceEpisode(id: string, ep: EpisodeT, s: Settings, onProg
     mediaBase: "",
     music: s.music ? `/assets/music/${s.music}` : null,
     cast: ep.cast,
-    scenes: ep.scenes.map((sc, i) => {
-      const speech = durations.get(items[i].out) ?? 3;
-      return {
-        ...sc,
-        audio: `/media/${id}/audio/scene-${String(i + 1).padStart(2, "0")}.wav`,
-        durationSec: speech + PAUSE_AFTER_SEC,
-        words: estimateWords(sc.narration, speech),
-      };
-    }),
+    scenes: ep.scenes.map((sc, i) => ({
+      ...sc,
+      audio: audioUrl(id, i),
+      durationSec: speech[i] + PAUSE_AFTER_SEC,
+      words: estimateWords(sc.narration, speech[i]),
+    })),
+  };
+}
+
+// Slideshow narration: the timeline has audio and timings; images are added when rendering.
+export async function voiceSlideshow(id: string, show: SlideshowT, s: Settings, onProgress: (p: number) => void): Promise<SlideTimeline> {
+  const speech = await recordNarration(id, show.scenes.map((sc) => ({ text: sc.narration, voice: sc.voice })), s, onProgress);
+  return {
+    title: show.title,
+    fps: FPS,
+    format: s.format,
+    mediaBase: "",
+    music: s.music ? `/assets/music/${encodeURIComponent(s.music)}` : null,
+    musicVolume: s.musicVolume,
+    captions: s.captions,
+    scenes: show.scenes.map((sc, i) => ({
+      ...sc,
+      image: null,
+      audio: audioUrl(id, i),
+      durationSec: speech[i] + SLIDE_PAUSE_SEC,
+      words: estimateWords(sc.narration, speech[i]),
+    })),
   };
 }

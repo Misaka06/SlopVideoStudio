@@ -68,6 +68,28 @@ Tools: `script_guide`, `produce_from_script`, `video_status`, `get_script`, `edi
 Models that can generate images can also build the background, prop and character libraries themselves
 (prompt tool → generate → import tool). Full agent workflow: [AGENTS.md](AGENTS.md).
 
+## Image slideshow videos
+
+A second video type: a narrated documentary-style video made only of **images, slow camera moves, transitions,
+captions and music** (like "What did people REALLY do all day in the Middle Ages?"). The model decides the scene
+structure, camera move, transition, voice and music per video; **you generate the images** from copy-paste prompts.
+
+1. **Script.** Ask your MCP assistant for a slideshow (`slideshow_guide` → `produce_slideshow`), or open **New videos →
+   Image slideshow**, press *Copy brief for my AI chat*, paste the reply's JSON back and press *Create slideshow*
+   (sample: `examples/medieval-day.json`). The narration is recorded straight away. Pick a **Look**: *White stickman comic*
+   (a built-in art direction plus a fixed round-headed stickman hero, so every image matches: thick ink outlines, dark
+   detailed scenes) or a free style the AI invents. In JSON: `"preset": "stickman"`.
+2. **Images.** The project page lists one prompt per scene (the shared art style and the recurring characters' looks
+   are woven in, with the aspect ratio and a composition hint for the camera move). *Copy prompt* / *Copy all prompts*,
+   generate in any image tool, then **paste with Ctrl+V** (copy the image, press Ctrl+V on the page: it fills the highlighted
+   scene, then moves to the next empty one; several copied files at once work too), or drop the pictures on the cards, or all at once (files named `1.png`, `slide-02.jpg`
+   go to that scene, others fill the scenes in file-name order). Through MCP: `slide_prompts`, `import_slide_images`.
+3. **Render.** Once every scene has an image (`render_video` / *Render video*). Scenes get a Ken Burns move (zoom, pan,
+   push-in, aimable with `focus`), a transition (crossfade, dip, slide, wipe, zoom, flash, blur), optional lower-third
+   label, and bold or subtle word-synced captions. Voice, speed, music, volume and captions can be changed afterwards.
+
+Scripts, prompts and settings stay editable in the app; changing only visuals re-renders without re-recording the voice.
+
 ## The app
 
 - **New video**: paste a script, then choose 16:9 or 9:16, language (English/Spanish), voice, speed and music.

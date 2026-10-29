@@ -50,6 +50,19 @@ For many videos, queue several episodes in a row and poll once; rendering is seq
 `POST http://localhost:4000/api/projects` with `{ "episode": {...}, "settings": {"format":"landscape","lang":"en-us","voice":"am_michael"} }`,
 then `GET /api/projects` for status. `GET /api/script-guide` returns the writing rules.
 
+### B2. Image slideshow videos (images + camera moves + transitions + narration)
+Use when the user wants a documentary/explainer made from generated pictures instead of stick figures.
+1. `slideshow_guide` returns the rules, JSON shape, voices and music files. You decide structure, camera, transitions, voice, music.
+   Use `preset: "stickman"` (white stickman comic: app supplies the art style and the fixed hero "Stickman"; list him in a scene's `subjects`) for story/"what if" videos, or omit it and write your own `style`.
+2. `produce_slideshow { slideshow, format?, language?, voice? }` records the narration and **returns one image prompt per scene**.
+   Give those prompts to the user verbatim (they generate the images; file names `slide-01.png` ...).
+3. When the images exist: `import_slide_images { id, file_paths }` (scene order), then `render_video { id }`.
+   `render_video` refuses while any scene lacks an image (`with_placeholders: true` overrides). `slide_prompts` re-lists prompts (`only_missing`).
+4. `get_script` / `edit_scene` also work on slideshows (changed `prompt` text changes the derived image prompt; changed narration re-voices).
+REST: `POST /api/slideshows`, `GET /api/slideshow-guide`, `GET /api/projects/:id/slide-prompts`, `PUT /api/projects/:id/slides/:n/image`,
+`POST /api/projects/:id/slides/:n/import`. Schema/types: `src/slides.ts`; composition: `src/Slideshow.tsx`; prompts, guide, images: `core/slideshow.ts`.
+Check visuals with `npm run stills -- examples/medieval-day.json stills/ landscape [imagesDir]`.
+
 ### C. Upgrade the visuals (optional, reuses across all videos)
 - Backgrounds: `background_prompts` returns image prompts; generate at 16:9, then `import_background { key, file_path }`.
 - Props: `create_prop` (new) or `prop_prompts` (missing built-ins); generate on the **solid #00FF00 green** background;
@@ -90,7 +103,7 @@ Script craft rules that make better videos:
 
 | Path | What |
 |---|---|
-| `src/` | The video itself (Remotion): `schema.ts`, `Episode.tsx`, `character/` rig, `world/` backgrounds and set pieces |
+| `src/` | The video itself (Remotion): `schema.ts`, `Episode.tsx`, `character/` rig, `world/` backgrounds and set pieces; image slideshows: `slides.ts` (schema, prompt builder), `Slideshow.tsx` |
 | `core/` | Storage, job queue (`jobs.ts`), script guide + normalizer, Kokoro voice, renderer, background/prop/character libraries |
 | `server/index.ts` | REST API + serves the web UI |
 | `web/` | App UI (React + Vite) |

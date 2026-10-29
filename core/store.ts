@@ -4,6 +4,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { join, resolve } from "node:path";
 import { randomBytes } from "node:crypto";
 import { normalizeEpisode, type EpisodeT, type Timeline } from "../src/schema";
+import type { CaptionStyle, SlideshowT, SlideTimeline } from "../src/slides";
 
 export const ROOT = resolve(import.meta.dirname, "..");
 export const PROJECTS_DIR = join(ROOT, "projects");
@@ -18,6 +19,8 @@ export type Settings = {
   speed: number;
   music: string | null;
   imageBackgrounds: boolean; // use images from the background library when they exist
+  captions: CaptionStyle; // slideshows only
+  musicVolume: number; // slideshows only
 };
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -27,6 +30,8 @@ export const DEFAULT_SETTINGS: Settings = {
   speed: 1.05,
   music: null,
   imageBackgrounds: true,
+  captions: "bold",
+  musicVolume: 0.12,
 };
 
 export type Project = {
@@ -41,6 +46,10 @@ export type Project = {
   error: string | null;
   episode: EpisodeT | null;
   timeline: Timeline | null;
+  // Image slideshows (episode/timeline stay null for these): the script, and the voiced
+  // timeline without images (images are read from projects/<id>/images at use time).
+  slideshow?: SlideshowT | null;
+  slides?: SlideTimeline | null;
   video: string | null; // URL path of the MP4
   createdAt: number;
   updatedAt: number;
@@ -71,6 +80,7 @@ export function get(id: string): Project | null {
   if (!existsSync(f)) return null;
   const p = JSON.parse(readFileSync(f, "utf8")) as Project;
   // Projects saved before a schema change get the new fields filled in.
+  p.settings = { ...DEFAULT_SETTINGS, ...p.settings };
   if (p.episode) p.episode = normalizeEpisode(p.episode);
   cache.set(id, p);
   return p;
@@ -89,8 +99,8 @@ export function remove(id: string) {
 // Anything left "running" by a crash goes back in the queue on startup.
 export function recover() {
   for (const p of list()) {
-    if (p.status === "running" && p.episode) save({ ...p, status: "queued", message: "Resumed after restart", progress: 0 });
+    if (p.status === "running" && (p.episode || p.slideshow)) save({ ...p, status: "queued", message: "Resumed after restart", progress: 0 });
     // Projects from the old topic-only flow never got a script; they can't continue.
-    else if (!p.episode && p.status !== "error") save({ ...p, status: "error", next: null, error: "No script. Send one with produce_from_script.", message: "No script" });
+    else if (!p.episode && !p.slideshow && p.status !== "error") save({ ...p, status: "error", next: null, error: "No script. Send one with produce_from_script.", message: "No script" });
   }
 }
