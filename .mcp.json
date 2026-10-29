@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "youtube-animator": {
+      "command": "npx",
+      "args": ["tsx", "mcp/server.ts"]
+    }
+  }
+}

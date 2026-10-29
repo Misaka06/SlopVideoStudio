@@ -1,0 +1,20 @@
+node_modules/
+dist/
+projects/
+models/
+render.log
+*.log
+stills/
+out/
+
+# secrets and local config
+.env
+.env.*
+.claude/settings.local.json
+.claude/worktrees/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

@@ -1,0 +1,406 @@
+{
+  "title": "What If You Were Trapped in a Time Loop",
+  "cast": [
+    {
+      "name": "Max",
+      "color": "#d9472b",
+      "accent": "#3fb7ff",
+      "outfit": "hoodie",
+      "body": "normal",
+      "hair": "spiky",
+      "hairColor": "#5a3a1e",
+      "hat": "none",
+      "accessory": "none",
+      "tie": false,
+      "scale": 1
+    },
+    {
+      "name": "Little Max",
+      "color": "#d9472b",
+      "accent": "#3fb7ff",
+      "outfit": "overalls",
+      "body": "normal",
+      "hair": "spiky",
+      "hairColor": "#5a3a1e",
+      "hat": "none",
+      "accessory": "none",
+      "tie": false,
+      "scale": 0.6
+    },
+    {
+      "name": "Mom",
+      "color": "#4a8f6b",
+      "accent": "#ffb14d",
+      "outfit": "dress",
+      "body": "slim",
+      "hair": "bun",
+      "hairColor": "#8a4a22",
+      "hat": "none",
+      "accessory": "none",
+      "tie": false,
+      "scale": 1
+    },
+    {
+      "name": "Teacher",
+      "color": "#8a5fb5",
+      "accent": "#7cdf6a",
+      "outfit": "sweater",
+      "body": "round",
+      "hair": "bun",
+      "hairColor": "#b8b8c0",
+      "hat": "none",
+      "accessory": "glasses",
+      "tie": false,
+      "scale": 1
+    },
+    {
+      "name": "Senator Voss",
+      "color": "#2b3a55",
+      "accent": "#e8c95a",
+      "outfit": "suit",
+      "body": "broad",
+      "hair": "short",
+      "hairColor": "#c9c9d1",
+      "hat": "none",
+      "accessory": "monocle",
+      "tie": true,
+      "scale": 1
+    },
+    {
+      "name": "Stranger",
+      "color": "#3f4a5c",
+      "accent": "#b96aff",
+      "outfit": "suit",
+      "body": "slim",
+      "hair": "none",
+      "hairColor": "#222",
+      "hat": "tophat",
+      "accessory": "none",
+      "tie": true,
+      "scale": 1
+    }
+  ],
+  "scenes": [
+    {
+      "narration": "Every time your life ends, you wake up at five years old. Same nap. Same voice.",
+      "bg": "bedroom",
+      "time": "night",
+      "camera": "pushIn",
+      "transition": "iris",
+      "effect": "none",
+      "chars": [
+        {
+          "name": "Little Max",
+          "x": 0.45,
+          "pose": "idle",
+          "face": "shocked",
+          "facing": "right",
+          "action": "tremble",
+          "holds": "none",
+          "emote": "exclaim",
+          "talking": false
+        }
+      ],
+      "set": [
+        {
+          "kind": "bed",
+          "x": 0.15
+        },
+        {
+          "kind": "clock",
+          "x": 0.8
+        },
+        {
+          "kind": "lamp",
+          "x": 0.92
+        }
+      ],
+      "label": "",
+      "hud": "LIVES: 1"
+    },
+    {
+      "narration": "Max? Nap time's over! You've heard those words a hundred times.",
+      "bg": "bedroom",
+      "time": "day",
+      "camera": "static",
+      "transition": "cut",
+      "effect": "none",
+      "chars": [
+        {
+          "name": "Mom",
+          "x": 0.72,
+          "pose": "wave",
+          "face": "happy",
+          "facing": "left",
+          "action": "walkIn",
+          "holds": "cup",
+          "emote": "none",
+          "talking": true
+        },
+        {
+          "name": "Little Max",
+          "x": 0.35,
+          "pose": "facepalm",
+          "face": "sleepy",
+          "facing": "right",
+          "action": "none",
+          "holds": "none",
+          "emote": "zzz",
+          "talking": false
+        }
+      ],
+      "set": [
+        {
+          "kind": "door",
+          "x": 0.93
+        },
+        {
+          "kind": "plant",
+          "x": 0.06
+        }
+      ],
+      "label": "",
+      "hud": "LIVES: 2"
+    },
+    {
+      "narration": "At first, you use it to ace every test in kindergarten. The teacher thinks you're a genius.",
+      "bg": "classroom",
+      "time": "day",
+      "camera": "panRight",
+      "transition": "wipe",
+      "effect": "sparkles",
+      "chars": [
+        {
+          "name": "Little Max",
+          "x": 0.3,
+          "pose": "celebrate",
+          "face": "happy",
+          "facing": "right",
+          "action": "jump",
+          "holds": "trophy",
+          "emote": "none",
+          "talking": false
+        },
+        {
+          "name": "Teacher",
+          "x": 0.72,
+          "pose": "shrug",
+          "face": "shocked",
+          "facing": "left",
+          "action": "none",
+          "holds": "book",
+          "emote": "question",
+          "talking": false
+        }
+      ],
+      "set": [
+        {
+          "kind": "desk",
+          "x": 0.85
+        }
+      ],
+      "label": "",
+      "hud": "LIVES: 5"
+    },
+    {
+      "narration": "By life number sixty-four, you know every election result before it happens.",
+      "bg": "stage",
+      "time": "day",
+      "camera": "dutch",
+      "transition": "fade",
+      "effect": "none",
+      "chars": [
+        {
+          "name": "Senator Voss",
+          "x": 0.62,
+          "pose": "point",
+          "face": "angry",
+          "facing": "left",
+          "action": "none",
+          "holds": "none",
+          "emote": "anger",
+          "talking": false
+        },
+        {
+          "name": "Max",
+          "x": 0.22,
+          "pose": "cross",
+          "face": "smug",
+          "facing": "right",
+          "action": "none",
+          "holds": "newspaper",
+          "emote": "none",
+          "talking": false
+        }
+      ],
+      "set": [
+        {
+          "kind": "podium",
+          "x": 0.62
+        }
+      ],
+      "label": "SEN. VOSS",
+      "hud": "LIVES: 64"
+    },
+    {
+      "narration": "So you run for president. And of course, you win.",
+      "bg": "capitol",
+      "time": "day",
+      "camera": "zoomOut",
+      "transition": "flash",
+      "effect": "confetti",
+      "chars": [
+        {
+          "name": "Max",
+          "x": 0.5,
+          "pose": "armsUp",
+          "face": "happy",
+          "facing": "right",
+          "action": "bounce",
+          "holds": "flag",
+          "emote": "none",
+          "talking": false
+        }
+      ],
+      "set": [
+        {
+          "kind": "podium",
+          "x": 0.5
+        }
+      ],
+      "label": "PRESIDENT MAX",
+      "hud": "LIVES: 65"
+    },
+    {
+      "narration": "Then you get rich. Absurdly rich. It stops being fun around life ninety.",
+      "bg": "bank",
+      "time": "day",
+      "camera": "closeUp",
+      "transition": "slide",
+      "effect": "moneyRain",
+      "chars": [
+        {
+          "name": "Max",
+          "x": 0.45,
+          "pose": "handsHips",
+          "face": "smug",
+          "facing": "right",
+          "action": "none",
+          "holds": "moneyBag",
+          "emote": "money",
+          "talking": false
+        }
+      ],
+      "set": [
+        {
+          "kind": "moneyPile",
+          "x": 0.75
+        },
+        {
+          "kind": "chest",
+          "x": 0.18
+        }
+      ],
+      "label": "",
+      "hud": "LIVES: 90"
+    },
+    {
+      "narration": "By life one hundred and two, you just want to go fishing.",
+      "bg": "lake",
+      "time": "sunset",
+      "camera": "panRight",
+      "transition": "fade",
+      "effect": "none",
+      "chars": [
+        {
+          "name": "Max",
+          "x": 0.28,
+          "pose": "sit",
+          "face": "neutral",
+          "facing": "right",
+          "action": "none",
+          "holds": "fishingRod",
+          "emote": "none",
+          "talking": false
+        }
+      ],
+      "set": [
+        {
+          "kind": "fire",
+          "x": 0.12
+        }
+      ],
+      "label": "",
+      "hud": "LIVES: 102"
+    },
+    {
+      "narration": "Then a stranger sits down next to you and says: I'm stuck in a loop too.",
+      "bg": "lake",
+      "time": "night",
+      "camera": "closeUp",
+      "transition": "cut",
+      "effect": "fog",
+      "chars": [
+        {
+          "name": "Max",
+          "x": 0.28,
+          "pose": "sit",
+          "face": "shocked",
+          "facing": "right",
+          "action": "none",
+          "holds": "fishingRod",
+          "emote": "exclaim",
+          "talking": false
+        },
+        {
+          "name": "Stranger",
+          "x": 0.66,
+          "pose": "wave",
+          "face": "smug",
+          "facing": "left",
+          "action": "walkIn",
+          "holds": "none",
+          "emote": "none",
+          "talking": true
+        }
+      ],
+      "set": [
+        {
+          "kind": "fire",
+          "x": 0.5
+        }
+      ],
+      "label": "",
+      "hud": "LIVES: 102"
+    },
+    {
+      "narration": "And this is my nine hundredth time meeting you.",
+      "bg": "void",
+      "time": "night",
+      "camera": "pushIn",
+      "transition": "fade",
+      "effect": "glitch",
+      "chars": [
+        {
+          "name": "Stranger",
+          "x": 0.5,
+          "pose": "handsHips",
+          "face": "determined",
+          "facing": "left",
+          "action": "float",
+          "holds": "wand",
+          "emote": "none",
+          "talking": true
+        }
+      ],
+      "set": [
+        {
+          "kind": "portal",
+          "x": 0.82
+        }
+      ],
+      "label": "",
+      "hud": "LIVES: ???"
+    }
+  ]
+}
